@@ -1,4 +1,4 @@
-from picamera import PiCamera
+#from picamera import PiCamera
 from fractions import Fraction
 import picamera.array
 import sys
@@ -9,8 +9,15 @@ import numpy as np
 import cv2
 import math
 import random
+import string
 import RobotAI
 import DroneUtils
+
+import socket
+
+
+
+
 
 ser = serial.Serial('/dev/ttyACM0', 9600, timeout = 0);
 
@@ -438,7 +445,25 @@ def automateCalibration():
 # pointed somewhere within the given bounds of an image. This method will first 
 # get the robots horizontal servo centered, and then the vertical.
 def centerLaser(bounds):
-	xMax = getMax(bounds[0], bounds[4]); 
+	xMax = getMax(bounddef parse_request(self):
+		"Turn basic request headers in something we can use"
+		temp = [i.strip() for i in self._raw_request.splitlines()]
+		
+		if -1 == temp[0].find('HTTP'):
+			raise InvalidRequest('Incorrect Protocol')
+		
+		# Figure out our request method, path, and which version of HTTP we're using
+		method, path, protocol = [i.strip() for i in temp[0].split()]
+		
+		# Create the headers, but only if we have a GET reqeust
+		headers = {}
+		if 'GET' == method:
+			for k, v in [i.split(':', 1) for i in temp[1:-1]]:
+				headers[k.strip()] = v.strip()
+		else:
+			raise InvalidRequest('Only accepts GET requests')
+		
+		return method, path, protocol, headerss[0], bounds[4]); 
 	xMin = getMin(bounds[2], bounds[6]);
 	yMax = getMax(bounds[5], bounds[7]);
 	yMin = getMin(bounds[1], bounds[3]);
@@ -496,6 +521,8 @@ def getMin(a, b):
 ##################################################################################
 ##################################################################################
 
+'''
+
 print "Now controlling the Ground Robot"
 print "------------------------------------------------------------"
 print "To move teh drone:"
@@ -525,8 +552,81 @@ print " "
 print "------------------------------------------------------------"
 print "Type 'quit' to exit the program"
 
+'''
 
+# while 1:
+# 	cmd = raw_input("");
+# 	if cmd:
+# 		sendCmd(cmd);
+
+
+def parse_request(rawRequest):
+	# "Turn basic request headers in something we can use"
+	temp = [i.strip() for i in rawRequest.splitlines()]
+	
+	if -1 == temp[0].find('HTTP'):
+		raise InvalidRequest('Incorrect Protocol')
+	
+	# Figure out our request method, path, and which version of HTTP we're using
+	method, path, protocol = [i.strip() for i in temp[0].split()]
+	
+	# Create the headers, but only if we have a GET reqeust
+	headers = {}
+	if 'GET' == method:
+		for k, v in [i.split(':', 1) for i in temp[1:-1]]:
+			headers[k.strip()] = v.strip()
+	else:
+		raise InvalidRequest('Only accepts GET requests')
+	
+	return method, path, protocol, headers
+
+
+
+
+HOST = ''   # Symbolic name, meaning all available interfaces
+PORT = 8800 # Arbitrary non-privileged port
+CLRF = '\r\n' # place holder for return carriage
+ 
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+print 'Socket created'
+ 
+#Bind socket to local host and port
+try:
+    s.bind((HOST, PORT))
+except socket.error as msg:
+    print 'Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+    sys.exit()
+     
+print 'Socket bind complete'
+ 
+#Start listening on socket
+s.listen(10)
+print 'Socket now listening'
+ 
+#now keep talking with the client
 while 1:
-	cmd = raw_input("");
-	if cmd:
+	#wait to accept a connection - blocking call
+	conn, addr = s.accept()
+
+	rawRequest = conn.recv(1024)
+
+	method, path, protocol, headers = parse_request(rawRequest)
+
+	print 'Request from ' + addr[0] + ':' + str(addr[1]) + ' on ' + protocol + ' to ' + path
+
+	if path == '/':
+		conn.send('HTTP/1.1 200 OK' + CLRF)
+		conn.send('Content-Type: text/html' + CLRF*2)
+		conn.send('<html><head><script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script><script>$(document).ready(function(){$("#btn").click(function(){$.ajax({url: "./"+$("#cmd").val(), success: function(result){console.log("got response: "+result);}});});});</script></head><body><h1>Welcome Good Sir</h1><p>Enter your command</p><p><input type="text" id="cmd"></p><p><button type="button" id="btn">Send</button></body></html>')
+
+	else:
+		cmd = string.replace(path, '/', '')
 		sendCmd(cmd);
+		conn.send('HTTP/1.1 200 OK' + CLRF)
+		conn.send('Content-Type: text/html' + CLRF*2)
+		conn.send('You sent the command '+cmd)
+
+
+	conn.close()
+
+s.close()
