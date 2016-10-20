@@ -12,6 +12,11 @@ import random
 import RobotAI
 import DroneUtils
 
+import socket
+import string
+
+
+
 ser = serial.Serial('/dev/ttyACM0', 9600, timeout = 0);
 
 def danceMonkeyDance():
@@ -493,6 +498,7 @@ def getMin(a, b):
 		return b;
 
 
+
 ##################################################################################
 ##################################################################################
 
@@ -526,7 +532,80 @@ print "------------------------------------------------------------"
 print "Type 'quit' to exit the program"
 
 
+
+# while 1:
+# 	cmd = raw_input("");
+# 	if cmd:
+# 		sendCmd(cmd);
+
+
+def parse_socket_request(rawRequest):
+	# "Turn basic request headers in something we can use"
+	temp = [i.strip() for i in rawRequest.splitlines()]
+	
+	if -1 == temp[0].find('HTTP'):
+		raise InvalidRequest('Incorrect Protocol')
+	
+	# Figure out our request method, path, and which version of HTTP we're using
+	method, path, protocol = [i.strip() for i in temp[0].split()]
+	
+	# Create the headers, but only if we have a GET reqeust
+	headers = {}
+	if 'GET' == method:
+		for k, v in [i.split(':', 1) for i in temp[1:-1]]:
+			headers[k.strip()] = v.strip()
+	else:
+		raise InvalidRequest('Only accepts GET requests')
+	
+	return method, path, protocol, headers
+
+
+
+
+HOST = ''   # Symbolic name, meaning all available interfaces
+PORT = 8080 # Arbitrary non-privileged port
+CLRF = '\r\n' # place holder for return carriage
+ 
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+print 'Socket created'
+ 
+#Bind socket to local host and port
+try:
+    s.bind((HOST, PORT))
+except socket.error as msg:
+    print 'Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+    sys.exit()
+     
+print 'Socket bind complete'
+ 
+#Start listening on socket
+s.listen(10)
+print 'Socket now listening'
+ 
+#now keep talking with the client
 while 1:
-	cmd = raw_input("");
-	if cmd:
-		sendCmd(cmd);
+	#wait to accept a connection - blocking call
+	conn, addr = s.accept()
+
+	rawRequest = conn.recv(1024)
+
+	method, path, protocol, headers = parse_socket_request(rawRequest)
+
+	print 'Request from ' + addr[0] + ':' + str(addr[1]) + ' on ' + protocol + ' to ' + path
+
+	if path == '/':
+		conn.send('HTTP/1.1 200 OK' + CLRF)
+		conn.send('Content-Type: text/html' + CLRF*2)
+		conn.send('<html><head><script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script><script>function sendCMD(x) {    $.ajax({        url: "./" + x,        success: function(result) {            console.log("got response: " + result);        }    });};$(document).ready(function() {    $(window).keypress(function(e) {        var ev = e || window.event;        var key = ev.keyCode || ev.which;        if (key == 119) {            sendCMD(\'w\');        };        if (key == 97) {            sendCMD(\'a\');        }        if (key == 115) {            sendCMD(\'s\');        }        if (key == 100) {            sendCMD(\'d\');        }    });    $("#btn").click(function() {        sendCMD($("#cmd").val());    });});</script></head><body><h1>Welcome Good Sir</h1><p>------------------------------------------------------------<br/>To move teh drone:<br/>  w = forward<br/>  s = backward<br/>  a = left<br/>  d = right<br/><br/>To toggle the laser: f<br/><br/>To move the servos:<br/>  j = turn left<br/>  k = look down<br/>  l = turn right<br/>  i = look up<br/>  x = reset servo positions<br/><br/>To get a distance read:<br/> r = Get distance to laser<br/> b = Get distance alt. <br/> t = Get position of laser<br/> p = Find boxes<br/> q = Point laser to left most box<br/> e = Point laser to right most box<br/> c = calibrate lzr<br/><br/>------------------------------------------------------------<br/>Type quit to exit the program</p><p>Enter your command</p><p><input type="text" id="cmd"></p><p><button type="button" id="btn">Send</button></body></html>')
+
+	else:
+		cmd = string.replace(path, '/', '')
+		# sendCmd(cmd);
+		conn.send('HTTP/1.1 200 OK' + CLRF)
+		conn.send('Content-Type: text/html' + CLRF*2)
+		conn.send('You sent the command '+cmd)
+
+
+	conn.close()
+
+s.close()
